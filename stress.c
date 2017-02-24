@@ -18,8 +18,10 @@
 /*
 Build:
 gcc stress.c -O3 -g -pthread -o stress
+
 Usage:
 ./stress
+
 example of use: ./stress -n 2000 -c 100 -t 8 localhost:8080
 > localhost:8080 can be your local server, website, anything.
 */
@@ -32,6 +34,7 @@ example of use: ./stress -n 2000 -c 100 -t 8 localhost:8080
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/time.h>
 #include <sys/epoll.h>
 #include <netdb.h>
@@ -67,11 +70,14 @@ struct econn {
 char *outbuf;
 size_t outbufsize;
 
-struct sockaddr_in ssin;
+struct sockaddr_storage sss;
+socklen_t sssln = 0;
 
 // Initialize them
 int concurrency = 1;
 int number_of_threads = 1;
+
+char *udaddr = "";
 
 //volatile them, the numbers can go up to gazilion
 volatile uint64_t numrequests = 0;
@@ -88,12 +94,13 @@ int debug = 0;
 
 struct timeval tv, tve;
 
-static const char short_options[] = "n:c:t";
+static const char short_options[] = "n:c:t:u";
 
 static const struct option long_options[] = {
   {"number", 1, NULL, 'n'},
   {"concurrency", 1, NULL, 'c'},
   {"threads", 0, NULL, 't'},
+  {"udaddr", 1, NULL, 'u'},
   {NULL, 0, NULL, 0}
 };
 
@@ -126,7 +133,7 @@ static void init_con (int efd, struct econn *ec)
   struct epoll_event evt;
   int ret;
 
-  ec->fd = socket (AF_INET, SOCK_STREAM, 0);
+  ec->fd = socket (sss.ss_family, SOCK_STREAM, 0);
   ec->offs = 0;
   ec->flags = 0;
 
@@ -138,7 +145,7 @@ static void init_con (int efd, struct econn *ec)
 
   fcntl (ec->fd, F_SETFL, O_NONBLOCK);
 
-  ret = connect (ec->fd, (struct sockaddr *) &ssin, sizeof (ssin));
+  ret = connect (ec->fd, (struct sockaddr *) &sss, sssln);
 
   if (ret && errno != EINPROGRESS)
     {
@@ -311,7 +318,8 @@ static void usage () {
 	  "Options:\n"
 	  "   -n, --number       total number of requests (0 for inifinite, Ctrl-C to abort)\n"
 	  "   -c, --concurrency  number of concurrent connections\n"
-	  "   -t, --threads      number of threads)\n");
+	  "   -t, --threads      number of threads)\n"
+	  "   -u, --udaddr       path to unix domain socket\n");
   exit (0);
 }
 
@@ -324,6 +332,8 @@ int main (int argc, char *argv[]) {
   int port = 80;
   char *host = NULL;
   struct hostent *h;
+  struct sockaddr_in *ssin = (struct sockaddr_in *) &sss;
+  struct sockaddr_un *ssun = (struct sockaddr_un *) &sss;
 
   if (argc == 1)
     usage ();
@@ -347,6 +357,9 @@ int main (int argc, char *argv[]) {
 	case '%':
 	  usage ();
 	case -1:
+	  break;
+	case 'u':
+	  udaddr = optarg;
 	  break;
 	default:
 	  printf ("Unexpected argument: '%c'\n", nextoption);
@@ -389,16 +402,27 @@ int main (int argc, char *argv[]) {
 	rq = "/";
     }
 
-  h = gethostbyname (host);
-  if (!h || !h->h_length)
+  if (strnlen (udaddr, sizeof (ssun->sun_path) - 1) == 0)
     {
-      printf ("gethostbyname failed | bad URL maybe?\n");
-      return 1;
-    }
+      h = gethostbyname (host);
+      if (!h || !h->h_length)
+	{
+	  printf ("gethostbyname failed | wrong URL maybe?\n");
+	  return 1;
+	}
 
-  ssin.sin_addr.s_addr = *(u_int32_t *) h->h_addr;
-  ssin.sin_family = PF_INET;
-  ssin.sin_port = htons (port);
+      ssin->sin_addr.s_addr = *(u_int32_t *) h->h_addr;
+      ssin->sin_family = PF_INET;
+      ssin->sin_port = htons (port);
+      sssln = sizeof (struct sockaddr_in);
+    }
+  else
+    {
+      ssun->sun_family = PF_UNIX;
+      ssun->sun_path;
+      strncpy (ssun->sun_path, udaddr, sizeof (ssun->sun_path) - 1);
+      sssln = sizeof (struct sockaddr_un);
+    }
 
   /* prepare request buffer */
   outbuf = malloc (strlen (rq) + sizeof (HTTP_REQUEST) + strlen (host));
