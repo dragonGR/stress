@@ -329,11 +329,22 @@ int main (int argc, char *argv[]) {
   int nextoption;
   int n;
   pthread_t uselessthread;
-  int port = 80;
   char *host = NULL;
+  char *port = "http";
   struct hostent *h;
   struct sockaddr_in *ssin = (struct sockaddr_in *) &sss;
+  struct sockaddr_in6 *ssin6 = (struct sockaddr_in6 *)&sss;
   struct sockaddr_un *ssun = (struct sockaddr_un *) &sss;
+  struct addrinfo *result, *rp;
+	struct addrinfo hints;
+	int j, testfd;
+
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+
+	memset(&sss, 0, sizeof(struct sockaddr_storage));
 
   if (argc == 1)
     usage ();
@@ -353,6 +364,12 @@ int main (int argc, char *argv[]) {
 	  break;
 	case 't':
 	  number_of_threads = atoi (optarg);
+	  break;
+	case '4':
+	  hints.ai_family = PF_INET;
+	  break;
+	case '6':
+	  hints.ai_family = PF_INET6;
 	  break;
 	case '%':
 	  usage ();
@@ -396,25 +413,57 @@ int main (int argc, char *argv[]) {
   else if (*rq == ':')
     {
       *rq++ = 0;
-      port = atoi (rq);
+      port = rq;
       rq = strchr (rq, '/');
-      if (rq == NULL)
+            		if (*rq == '/') {
+			port = strndup(port, rq - port);
+			if(port == NULL) {
+				perror("port = strndup(rq, rq - port)");
+				exit(EXIT_FAILURE);
+			}
+		}
+		else
 	rq = "/";
     }
 
   if (strnlen (udaddr, sizeof (ssun->sun_path) - 1) == 0)
     {
-      h = gethostbyname (host);
-      if (!h || !h->h_length)
-	{
-	  printf ("gethostbyname failed | wrong URL maybe?\n");
-	  return 1;
+      j = getaddrinfo(host, port, &hints, &result);
+		if (j != 0) {
+			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(j));
+			exit(EXIT_FAILURE);
 	}
 
-      ssin->sin_addr.s_addr = *(u_int32_t *) h->h_addr;
-      ssin->sin_family = PF_INET;
-      ssin->sin_port = htons (port);
-      sssln = sizeof (struct sockaddr_in);
+		for (rp = result; rp != NULL; rp = rp->ai_next) {
+			testfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+			if (testfd == -1)
+				continue;
+
+			if (connect(testfd, rp->ai_addr, rp->ai_addrlen) == 0) {
+				close(testfd);
+				break;
+			}
+
+			close(testfd);
+		}
+
+		if (rp == NULL) { /* No address succeeded */
+			fprintf(stderr, "getaddrinfo failed\n");
+			exit(EXIT_FAILURE);
+		}
+
+		if(rp->ai_addr->sa_family == PF_INET) {
+			*ssin = *(struct sockaddr_in*)rp->ai_addr;
+		} else if(rp->ai_addr->sa_family == PF_INET6) {
+			*ssin6 = *(struct sockaddr_in6*)rp->ai_addr;
+		} else {
+			fprintf(stderr, "invalid family %d from getaddrinfo\n", rp->ai_addr->sa_family);
+			exit(EXIT_FAILURE);
+		}
+
+		sssln = rp->ai_addrlen;
+
+		freeaddrinfo(result);
     }
   else
     {
