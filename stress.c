@@ -87,7 +87,7 @@ volatile uint64_t badrequests = 0;
 volatile uint64_t inbytes = 0;
 volatile uint64_t outbytes = 0;
 
-uint64_t ticks;
+uint64_t ticks = 0;
 
 // TODO: Add debug flag
 int debug = 0;
