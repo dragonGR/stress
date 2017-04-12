@@ -406,8 +406,11 @@ int main (int argc, char *argv[]) {
 
   else if (*rq == '/')
     {
-      host = malloc (rq - s);
-      memcpy (host, rq, rq - s);
+		host = strndup(s, rq - s);
+		if(host == NULL) {
+		    perror("host = strndup(s, rq - s)");
+		    exit(EXIT_FAILURE);
+		}
 
     }
   else if (*rq == ':')
