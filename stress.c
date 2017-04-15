@@ -94,13 +94,14 @@ int debug = 0;
 
 struct timeval tv, tve;
 
-static const char short_options[] = "n:c:t:u";
+static const char short_options[] = "n:c:t:u:h";
 
 static const struct option long_options[] = {
   {"number", 1, NULL, 'n'},
   {"concurrency", 1, NULL, 'c'},
   {"threads", 0, NULL, 't'},
   {"udaddr", 1, NULL, 'u'},
+  { "host", 1, NULL, 'h' },
   {NULL, 0, NULL, 0}
 };
 
@@ -319,7 +320,8 @@ static void usage () {
 	  "   -n, --number       total number of requests (0 for inifinite, Ctrl-C to abort)\n"
 	  "   -c, --concurrency  number of concurrent connections\n"
 	  "   -t, --threads      number of threads)\n"
-	  "   -u, --udaddr       path to unix domain socket\n");
+	  "   -u, --udaddr       path to unix domain socket\n"
+	  "   -h, --host         host to use for http request\n");
   exit (0);
 }
 
@@ -330,6 +332,7 @@ int main (int argc, char *argv[]) {
   int n;
   pthread_t uselessthread;
   char *host = NULL;
+  char *node = NULL;
   char *port = "http";
   struct hostent *h;
   struct sockaddr_in *ssin = (struct sockaddr_in *) &sss;
@@ -378,6 +381,9 @@ int main (int argc, char *argv[]) {
 	case 'u':
 	  udaddr = optarg;
 	  break;
+	  case 'h':
+	  host = optarg;
+	  break;
 	default:
 	  printf ("Unexpected argument: '%c'\n", nextoption);
 	  return 1;
@@ -397,7 +403,7 @@ int main (int argc, char *argv[]) {
   if (!strncmp (s, HTTP_PREFIX, sizeof (HTTP_PREFIX) - 1))
     s += (sizeof (HTTP_PREFIX) - 1);
 
-  host = s;
+  node = s;
 
   rq = strpbrk (s, ":/");
 
@@ -406,9 +412,9 @@ int main (int argc, char *argv[]) {
 
   else if (*rq == '/')
     {
-		host = strndup(s, rq - s);
-		if(host == NULL) {
-		    perror("host = strndup(s, rq - s)");
+		node = strndup(s, rq - s);
+		if(node == NULL) {
+		    perror("node = strndup(s, rq - s)");
 		    exit(EXIT_FAILURE);
 		}
 
@@ -431,7 +437,7 @@ int main (int argc, char *argv[]) {
 
   if (strnlen (udaddr, sizeof (ssun->sun_path) - 1) == 0)
     {
-      j = getaddrinfo(host, port, &hints, &result);
+      j = getaddrinfo(node, port, &hints, &result);
 		if (j != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(j));
 			exit(EXIT_FAILURE);
@@ -477,6 +483,8 @@ int main (int argc, char *argv[]) {
     }
 
   /* prepare request buffer */
+  if(host == NULL)
+		host = node;
   outbuf = malloc (strlen (rq) + sizeof (HTTP_REQUEST) + strlen (host));
   outbufsize = sprintf (outbuf, HTTP_REQUEST, rq, host);
 
