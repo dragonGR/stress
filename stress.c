@@ -45,6 +45,8 @@ example of use: ./stress -n 2000 -c 100 -t 8 localhost:8080
 #include <getopt.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <signal.h>
+typedef void (*sighandler_t)(int);
 
 // It can be set to HTTPS protocol
 #define HTTP_PREFIX "http://"
@@ -91,6 +93,9 @@ uint64_t ticks = 0;
 
 // TODO: Add debug flag
 int debug = 0;
+
+// For signal handler
+int exit_i = 0;
 
 struct timeval tv, tve;
 
@@ -184,7 +189,13 @@ static void *worker (void *arg) {
   for (;;)
     {
 
-      nerr = epoll_wait (efd, evts, sizeof (evts) / sizeof (evts[0]), -1);
+			do {
+			nerr = epoll_wait(efd, evts, sizeof(evts) / sizeof(evts[0]), -1);
+		} while (!exit_i && nerr < 0 && errno == EINTR);
+
+		if (exit_i != 0) {
+			exit(0);
+		}
 
       if (nerr == -1)
 	{
@@ -314,6 +325,10 @@ static void *worker (void *arg) {
     }
 }
 
+void signal_exit(int signal) {
+	exit_i++;
+}
+
 static void usage () {
   printf ("Usage: htstress [options] [website]\n"
 	  "Options:\n"
@@ -341,6 +356,21 @@ int main (int argc, char *argv[]) {
   struct addrinfo *result, *rp;
 	struct addrinfo hints;
 	int j, testfd;
+
+	sighandler_t ret;
+	ret = signal(SIGINT, signal_exit);
+
+	if (ret == SIG_ERR) {
+		perror("signal(SIGINT, handler)");
+		exit(0);
+	}
+
+	ret = signal(SIGTERM, signal_exit);
+
+	if (ret == SIG_ERR) {
+		perror("signal(SIGTERM, handler)");
+		exit(0);
+	}
 
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
