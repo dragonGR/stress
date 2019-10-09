@@ -46,7 +46,7 @@ example of use: ./stress -n 2000 -c 100 -t 8 localhost:8080
 #include <inttypes.h>
 #include <unistd.h>
 #include <signal.h>
-typedef void (*sighandler_t)(int);
+typedef void (*sighandler_t) (int);
 
 // It can be set to HTTPS protocol
 #define HTTP_PREFIX "http://"
@@ -106,17 +106,15 @@ static const struct option long_options[] = {
   {"concurrency", 1, NULL, 'c'},
   {"threads", 0, NULL, 't'},
   {"udaddr", 1, NULL, 'u'},
-  { "host", 1, NULL, 'h' },
+  {"host", 1, NULL, 'h'},
   {NULL, 0, NULL, 0}
 };
 
-static void sig_handler (int arg)
-{
+static void sig_handler (int arg) {
   maxrequests = numrequests;
 }
 
-static void start_time ()
-{
+static void start_time () {
   if (gettimeofday (&tv, NULL))
     {
       perror ("gettimeofday");
@@ -124,8 +122,7 @@ static void start_time ()
     }
 }
 
-static void end_time ()
-{
+static void end_time () {
   if (gettimeofday (&tve, NULL))
     {
       perror ("gettimeofday");
@@ -151,9 +148,11 @@ static void init_con (int efd, struct econn *ec)
 
   fcntl (ec->fd, F_SETFL, O_NONBLOCK);
 
-  	do {
-		ret = connect(ec->fd, (struct sockaddr*)&sss, sssln);
-	} while (ret && errno == EAGAIN);
+  do
+    {
+      ret = connect (ec->fd, (struct sockaddr *) &sss, sssln);
+    }
+  while (ret && errno == EAGAIN);
 
   if (ret && errno != EINPROGRESS)
     {
@@ -179,8 +178,7 @@ static void *worker (void *arg) {
 
   efd = epoll_create (concurrency);
 
-  if (efd == -1)
-    {
+  if (efd == -1) {
       perror ("epoll");
       exit (1);
     }
@@ -188,65 +186,61 @@ static void *worker (void *arg) {
   for (n = 0; n < concurrency; ++n)
     init_con (efd, ecs + n);
 
-  for (;;)
-    {
+  for (;;) {
 
-			do {
-			nerr = epoll_wait(efd, evts, sizeof(evts) / sizeof(evts[0]), -1);
-		} while (!exit_i && nerr < 0 && errno == EINTR);
+      do {
+	  nerr = epoll_wait (efd, evts, sizeof (evts) / sizeof (evts[0]), -1);
+	}
+      while (!exit_i && nerr < 0 && errno == EINTR);
 
-		if (exit_i != 0) {
-			exit(0);
-		}
+      if (exit_i != 0) {
+	  exit (0);
+	}
 
-      if (nerr == -1)
-	{
+      if (nerr == -1) {
 	  perror ("epoll_wait");
 	  exit (1);
 	}
 
-      for (n = 0; n < nerr; ++n)
-	{
+      for (n = 0; n < nerr; ++n) {
 
 	  ec = (struct econn *) evts[n].data.ptr;
 
-	  if (ec == NULL)
-	    {
+	  if (ec == NULL) {
 	      fprintf (stderr, "fatal: NULL econn\n");
 	      exit (1);
 	    }
 
-	    if (evts[n].events & EPOLLERR) {
+	  if (evts[n].events & EPOLLERR) {
 	      /* it can occur from time to time */
-	      	      int error = 0;
-				socklen_t errlen = sizeof(error);
-				if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen) == 0) {
-					fprintf(stderr, "error = %s\n", strerror(error));
-				}
-				exit(1);
-			}
-
-			if (evts[n].events & EPOLLHUP) {
-				/* happens on HTTP 1.0 */
-				fprintf(stderr, "EPOLLHUP\n");
+	      int error = 0;
+	      socklen_t errlen = sizeof (error);
+	      if (getsockopt
+		  (fd, SOL_SOCKET, SO_ERROR, (void *) &error, &errlen) == 0)
+		{
+		  fprintf (stderr, "error = %s\n", strerror (error));
+		}
 	      exit (1);
 	    }
 
-	  if (evts[n].events & EPOLLOUT)
-	    {
+	  if (evts[n].events & EPOLLHUP) {
+	      /* happens on HTTP 1.0 */
+	      fprintf (stderr, "EPOLLHUP\n");
+	      exit (1);
+	    }
+
+	  if (evts[n].events & EPOLLOUT) {
 
 	      ret =
 		send (ec->fd, outbuf + ec->offs, outbufsize - ec->offs, 0);
 
-	      if (ret == -1 && errno != EAGAIN)
-		{
+	      if (ret == -1 && errno != EAGAIN) {
 		  /* Bad but straightforward */
 		  perror ("send");
 		  exit (1);
 		}
 
-	      if (ret > 0)
-		{
+	      if (ret > 0) {
 
 		  if (debug & DEBUG_REQUEST)
 		    write (2, outbuf + ec->offs, outbufsize - ec->offs);
@@ -254,8 +248,7 @@ static void *worker (void *arg) {
 		  ec->offs += ret;
 
 		  /* write done | schedule read */
-		  if (ec->offs == outbufsize)
-		    {
+		  if (ec->offs == outbufsize) {
 
 		      evts[n].events = EPOLLIN;
 		      evts[n].data.ptr = ec;
@@ -274,13 +267,11 @@ static void *worker (void *arg) {
 	  else if (evts[n].events & EPOLLIN)
 	    {
 
-	      for (;;)
-		{
+	      for (;;) {
 
 		  ret = recv (ec->fd, inbuf, sizeof (inbuf), 0);
 
-		  if (ret == -1 && errno != EAGAIN)
-		    {
+		  if (ret == -1 && errno != EAGAIN) {
 		      perror ("recv");
 		      exit (1);
 		    }
@@ -298,14 +289,17 @@ static void *worker (void *arg) {
 		    }
 
 		  if (debug & DEBUG_RESPONSE)
-		    write (2, inbuf, ret);
+		    {
+		      int res = write (2, inbuf, ret);
+		      if (res < 0)
+			perror ("Unable to write to stderr");
+		    }
 
 		  ec->offs += ret;
 
 		}
 
-	      if (!ret)
-		{
+	      if (!ret) {
 
 		  close (ec->fd);
 
@@ -336,8 +330,8 @@ static void *worker (void *arg) {
     }
 }
 
-void signal_exit(int signal) {
-	exit_i++;
+void signal_exit (int signal) {
+  exit_i++;
 }
 
 static void usage () {
@@ -351,7 +345,8 @@ static void usage () {
   exit (0);
 }
 
-int main (int argc, char *argv[]) {
+int main (int argc, char *argv[])
+{
   char *rq, *s;
   double delta, rps;
   int nextoption;
@@ -362,33 +357,35 @@ int main (int argc, char *argv[]) {
   char *port = "http";
   struct hostent *h;
   struct sockaddr_in *ssin = (struct sockaddr_in *) &sss;
-  struct sockaddr_in6 *ssin6 = (struct sockaddr_in6 *)&sss;
+  struct sockaddr_in6 *ssin6 = (struct sockaddr_in6 *) &sss;
   struct sockaddr_un *ssun = (struct sockaddr_un *) &sss;
   struct addrinfo *result, *rp;
-	struct addrinfo hints;
-	int j, testfd;
+  struct addrinfo hints;
+  int j, testfd;
 
-	sighandler_t ret;
-	ret = signal(SIGINT, signal_exit);
+  sighandler_t ret;
+  ret = signal (SIGINT, signal_exit);
 
-	if (ret == SIG_ERR) {
-		perror("signal(SIGINT, handler)");
-		exit(0);
-	}
+  if (ret == SIG_ERR)
+    {
+      perror ("signal(SIGINT, handler)");
+      exit (0);
+    }
 
-	ret = signal(SIGTERM, signal_exit);
+  ret = signal (SIGTERM, signal_exit);
 
-	if (ret == SIG_ERR) {
-		perror("signal(SIGTERM, handler)");
-		exit(0);
-	}
+  if (ret == SIG_ERR)
+    {
+      perror ("signal(SIGTERM, handler)");
+      exit (0);
+    }
 
-	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
+  memset (&hints, 0, sizeof (struct addrinfo));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG;
 
-	memset(&sss, 0, sizeof(struct sockaddr_storage));
+  memset (&sss, 0, sizeof (struct sockaddr_storage));
 
   if (argc == 1)
     usage ();
@@ -422,7 +419,7 @@ int main (int argc, char *argv[]) {
 	case 'u':
 	  udaddr = optarg;
 	  break;
-	  case 'h':
+	case 'h':
 	  host = optarg;
 	  break;
 	default:
@@ -453,11 +450,12 @@ int main (int argc, char *argv[]) {
 
   else if (*rq == '/')
     {
-		node = strndup(s, rq - s);
-		if(node == NULL) {
-		    perror("node = strndup(s, rq - s)");
-		    exit(EXIT_FAILURE);
-		}
+      node = strndup (s, rq - s);
+      if (node == NULL)
+	{
+	  perror ("node = strndup(s, rq - s)");
+	  exit (EXIT_FAILURE);
+	}
 
     }
   else if (*rq == ':')
@@ -465,55 +463,67 @@ int main (int argc, char *argv[]) {
       *rq++ = 0;
       port = rq;
       rq = strchr (rq, '/');
-            		if (*rq == '/') {
-			port = strndup(port, rq - port);
-			if(port == NULL) {
-				perror("port = strndup(rq, rq - port)");
-				exit(EXIT_FAILURE);
-			}
-		}
-		else
+      if (*rq == '/')
+	{
+	  port = strndup (port, rq - port);
+	  if (port == NULL)
+	    {
+	      perror ("port = strndup(rq, rq - port)");
+	      exit (EXIT_FAILURE);
+	    }
+	}
+      else
 	rq = "/";
     }
 
   if (strnlen (udaddr, sizeof (ssun->sun_path) - 1) == 0)
     {
-      j = getaddrinfo(node, port, &hints, &result);
-		if (j != 0) {
-			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(j));
-			exit(EXIT_FAILURE);
+      j = getaddrinfo (node, port, &hints, &result);
+      if (j != 0)
+	{
+	  fprintf (stderr, "getaddrinfo: %s\n", gai_strerror (j));
+	  exit (EXIT_FAILURE);
 	}
 
-		for (rp = result; rp != NULL; rp = rp->ai_next) {
-			testfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-			if (testfd == -1)
-				continue;
+      for (rp = result; rp != NULL; rp = rp->ai_next)
+	{
+	  testfd = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+	  if (testfd == -1)
+	    continue;
 
-			if (connect(testfd, rp->ai_addr, rp->ai_addrlen) == 0) {
-				close(testfd);
-				break;
-			}
+	  if (connect (testfd, rp->ai_addr, rp->ai_addrlen) == 0)
+	    {
+	      close (testfd);
+	      break;
+	    }
 
-			close(testfd);
-		}
+	  close (testfd);
+	}
 
-		if (rp == NULL) { /* No address succeeded */
-			fprintf(stderr, "getaddrinfo failed\n");
-			exit(EXIT_FAILURE);
-		}
+      if (rp == NULL)
+	{			/* No address succeeded */
+	  fprintf (stderr, "getaddrinfo failed\n");
+	  exit (EXIT_FAILURE);
+	}
 
-		if(rp->ai_addr->sa_family == PF_INET) {
-			*ssin = *(struct sockaddr_in*)rp->ai_addr;
-		} else if(rp->ai_addr->sa_family == PF_INET6) {
-			*ssin6 = *(struct sockaddr_in6*)rp->ai_addr;
-		} else {
-			fprintf(stderr, "invalid family %d from getaddrinfo\n", rp->ai_addr->sa_family);
-			exit(EXIT_FAILURE);
-		}
+      if (rp->ai_addr->sa_family == PF_INET)
+	{
+	  *ssin = *(struct sockaddr_in *) rp->ai_addr;
+	}
+      else if (rp->ai_addr->sa_family == PF_INET6)
+	{
+	  *ssin6 = *(struct sockaddr_in6 *) rp->ai_addr;
+	}
+      else
+	{
+	  fprintf (stderr, "invalid family %d from getaddrinfo\n",
+		   rp->ai_addr->sa_family);
+	  exit (EXIT_FAILURE);
+	}
 
-		sssln = rp->ai_addrlen;
+      sssln = rp->ai_addrlen;
 
-		freeaddrinfo(result);
+      freeaddrinfo (result);
     }
   else
     {
@@ -524,8 +534,8 @@ int main (int argc, char *argv[]) {
     }
 
   /* prepare request buffer */
-  if(host == NULL)
-		host = node;
+  if (host == NULL)
+    host = node;
   outbuf = malloc (strlen (rq) + sizeof (HTTP_REQUEST) + strlen (host));
   outbufsize = sprintf (outbuf, HTTP_REQUEST, rq, host);
 
@@ -567,3 +577,4 @@ int main (int argc, char *argv[]) {
 
   return 0;
 }
+
