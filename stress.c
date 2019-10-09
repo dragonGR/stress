@@ -151,7 +151,9 @@ static void init_con (int efd, struct econn *ec)
 
   fcntl (ec->fd, F_SETFL, O_NONBLOCK);
 
-  ret = connect (ec->fd, (struct sockaddr *) &sss, sssln);
+  	do {
+		ret = connect(ec->fd, (struct sockaddr*)&sss, sssln);
+	} while (ret && errno == EAGAIN);
 
   if (ret && errno != EINPROGRESS)
     {
@@ -214,10 +216,19 @@ static void *worker (void *arg) {
 	      exit (1);
 	    }
 
-	  if (evts[n].events & (EPOLLHUP | EPOLLERR))
-	    {
+	    if (evts[n].events & EPOLLERR) {
 	      /* it can occur from time to time */
-	      fprintf (stderr, "broken connection");
+	      	      int error = 0;
+				socklen_t errlen = sizeof(error);
+				if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *)&error, &errlen) == 0) {
+					fprintf(stderr, "error = %s\n", strerror(error));
+				}
+				exit(1);
+			}
+
+			if (evts[n].events & EPOLLHUP) {
+				/* happens on HTTP 1.0 */
+				fprintf(stderr, "EPOLLHUP\n");
 	      exit (1);
 	    }
 
