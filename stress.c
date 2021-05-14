@@ -335,7 +335,7 @@ void signal_exit (int signal) {
 }
 
 static void usage () {
-  printf ("Usage: htstress [options] [website]\n"
+  printf ("Usage: stress [options] [website]\n"
 	  "Options:\n"
 	  "   -n, --number       total number of requests (0 for inifinite, Ctrl-C to abort)\n"
 	  "   -c, --concurrency  number of concurrent connections\n"
